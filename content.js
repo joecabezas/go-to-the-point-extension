@@ -9,7 +9,6 @@ const retry = (fn, retriesLeft = 5, interval = 1000) =>
         }
 
         setTimeout(() => {
-          // console.log('retrying...')
           retry(fn, retriesLeft - 1, interval)
             .then(resolve)
             .catch(reject);
@@ -51,12 +50,12 @@ const createQueryElementsPromise = (query) =>
     else reject(`empty nodeList returned`);
   });
 
-const waitForQueryElement = (query, firstOnly = true) =>
+const waitForQueryElement = (query) =>
   new Promise((resolve, reject) => {
-    retry(() => createQueryElementsPromise(query, firstOnly))
-      .then((element) => resolve(element))
+    retry(() => createQueryElementsPromise(query))
+      .then((nodeList) => resolve(nodeList))
       .catch((error) =>
-        reject(`element for query: ${query} not found, error: ${error}`)
+        reject(`nodeList for query: ${query} not found, error: ${error}`)
       );
   });
 
@@ -74,16 +73,20 @@ const addGTPNotice = (href, anchorText) => fetch(GTP_NOTICE_HTML_PATH)
     primary_inner.prepend(template.content);
   });
 
-getGTPHref = waitForQueryElement(COMMENTS_CONTAINER)
-  .then(([container]) => {
-    hideElement(container);
-    doScroll();
-    return Promise.all([container, waitForQueryElement(COMMENTS_TEXT_LIST)]);
-  })
-  .then(([container, nodeList]) => {
-    showElement(container);
+let commentsContainer;
+const loadComments = () =>
+  waitForQueryElement(COMMENTS_CONTAINER)
+    .then(([container]) => {
+      commentsContainer = container;
+      hideElement(commentsContainer);
+      doScroll();
 
-    for(anchorTag of nodeList){
+      return wait(5000);
+    });
+
+const getHref = () =>
+  waitForQueryElement(COMMENTS_TEXT_LIST).then((nodeList) => {
+    for (anchorTag of nodeList) {
       commentText = anchorTag.parentElement.innerText;
       anchorText = anchorTag.innerText;
       href = anchorTag.href;
@@ -92,9 +95,18 @@ getGTPHref = waitForQueryElement(COMMENTS_CONTAINER)
       if (gtp_found) return { href, anchorText };
     }
 
-    throw 'no gtp found';
-  })
-  .catch((error) => console.log(error));
+    throw "no GTP comment found";
+  });
 
-getGTPHref
-  .then(({href, anchorText}) => addGTPNotice(href, anchorText))
+const NAVIGATE_EVENT = "yt-navigate-finish";
+document.addEventListener(NAVIGATE_EVENT, function (_event) {
+  console.log(NAVIGATE_EVENT)
+  loadComments().then(() =>
+    Promise.all([
+      new Promise(() => showElement(commentsContainer)),
+      getHref()
+        .then(({ href, anchorText }) => addGTPNotice(href, anchorText))
+        .catch((error) => console.log(error)),
+    ])
+  );
+});
