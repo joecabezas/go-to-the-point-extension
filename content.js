@@ -78,6 +78,11 @@ const loadComments = () =>
   waitForQueryElement(COMMENTS_CONTAINER)
     .then(([container]) => {
       commentsContainer = container;
+
+      if(commentsContainer.hasAttribute('hidden')){
+        throw "comments container is hidden";
+      }
+
       hideElement(commentsContainer);
       doScroll();
 
@@ -101,12 +106,14 @@ const getHref = () =>
 const NAVIGATE_EVENT = "yt-navigate-finish";
 document.addEventListener(NAVIGATE_EVENT, function (_event) {
   console.log(NAVIGATE_EVENT)
-  loadComments().then(() =>
-    Promise.all([
-      new Promise(() => showElement(commentsContainer)),
-      getHref()
-        .then(({ href, anchorText }) => addGTPNotice(href, anchorText))
-        .catch((error) => console.log(error)),
-    ])
-  );
+  loadComments()
+    .then(() =>
+      Promise.all([
+        new Promise(() => showElement(commentsContainer)),
+        getHref().then(({ href, anchorText }) =>
+          addGTPNotice(href, anchorText)
+        ),
+      ])
+    )
+    .catch((error) => console.log(error));
 });
